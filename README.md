@@ -1,14 +1,14 @@
 # React-Tailwind-Clickstream
 
-<img src="UI.png" width="500">
+<img src="UI.png" width="900">
 
-<img src="UI2.png" width="500">
+<img src="UI2.png" width="900">
 
-<img src="UI3.png" width="500">
+<img src="UI3.png" width="900">
 
-<img src="UI4.png" width="500">
+<img src="UI4.png" width="900">
 
-<img src="UI5.png" width="500">
+<img src="UI5.png" width="900">
 
 ### 1️⃣ Cài đặt dependencies
 ```bash
