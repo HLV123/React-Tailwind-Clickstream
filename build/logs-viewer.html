@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clickstream Logs Viewer - LeVanHung</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Segoe UI', 'Roboto', 'sans-serif'],
+                        mono: ['Consolas', 'Monaco', 'monospace'],
+                    },
+                    colors: {
+                        dark: {
+                            900: '#0f172a', // Slate 900
+                            800: '#1e293b', // Slate 800
+                            700: '#334155', // Slate 700
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        /* Custom Scrollbar cho đẹp hơn */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+        
+        .glass {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+    </style>
+</head>
+<body class="bg-dark-900 text-slate-200 min-h-screen font-sans selection:bg-indigo-500 selection:text-white">
+
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // --- ICONS (SVG dạng Component để không cần thư viện ngoài) ---
+        const Icons = {
+            Activity: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>,
+            Click: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"/></svg>,
+            Scroll: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>,
+            Eye: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>,
+            Globe: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>,
+            Refresh: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>,
+            Download: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>,
+            Trash: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>,
+            Clock: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>,
+        };
+
+        // --- COMPONENTS ---
+
+        const StatCard = ({ title, value, icon, color }) => (
+            <div className="glass p-5 rounded-xl flex items-center gap-4 transition-transform hover:-translate-y-1 hover:shadow-lg hover:shadow-indigo-500/10">
+                <div className={`p-3 rounded-lg bg-opacity-10 ${color.bg} ${color.text}`}>
+                    {icon}
+                </div>
+                <div>
+                    <h3 className="text-2xl font-bold text-white tracking-tight">{value}</h3>
+                    <p className="text-slate-400 text-sm font-medium uppercase tracking-wider">{title}</p>
+                </div>
+            </div>
+        );
+
+        const App = () => {
+            const [logs, setLogs] = useState([]);
+            const [filter, setFilter] = useState('all');
+            const [autoRefresh, setAutoRefresh] = useState(false);
+            const [isLoading, setIsLoading] = useState(false);
+
+            // Fetch Logic
+            const fetchLogs = async () => {
+                setIsLoading(true);
+                try {
+                    const response = await fetch('/api/get-logs');
+                    const data = await response.json();
+                    setLogs(data.logs || []);
+                } catch (error) {
+                    console.error('Error:', error);
+                    // Dữ liệu giả để test nếu không có API thật khi mở file html này trực tiếp
+                    // setLogs([
+                    //    { timestamp: Date.now(), sessionId: 'sess_12345678', eventType: 'click', elementType: 'BUTTON', elementText: 'Mua Ngay' },
+                    //    { timestamp: Date.now() - 5000, sessionId: 'sess_12345678', eventType: 'scroll', scrollPercentage: 50, scrollY: 1200 },
+                    // ]);
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            // Actions
+            const clearLogs = async () => {
+                if(confirm('Xóa sạch dữ liệu?')) {
+                    try { await fetch('/api/clear-logs', { method: 'DELETE' }); fetchLogs(); } 
+                    catch(e) { console.error(e); }
+                }
+            };
+
+            const exportLogs = () => {
+                const blob = new Blob([JSON.stringify({ logs }, null, 2)], { type: 'application/json' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `logs-${new Date().toISOString().slice(0,10)}.json`;
+                a.click();
+            };
+
+            // Effects
+            useEffect(() => { fetchLogs(); }, []);
+            
+            useEffect(() => {
+                let interval;
+                if (autoRefresh) interval = setInterval(fetchLogs, 5000);
+                return () => clearInterval(interval);
+            }, [autoRefresh]);
+
+            // Stats Calculation
+            const stats = useMemo(() => ({
+                total: logs.length,
+                clicks: logs.filter(l => l.eventType === 'click').length,
+                scrolls: logs.filter(l => l.eventType === 'scroll').length,
+                hovers: logs.filter(l => l.eventType === 'hover').length,
+                sessions: new Set(logs.map(l => l.sessionId)).size
+            }), [logs]);
+
+            // Render Helpers
+            const getEventStyle = (type) => {
+                switch(type) {
+                    case 'click': return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+                    case 'scroll': return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
+                    case 'hover': return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+                    case 'page_load': return 'bg-purple-500/10 text-purple-400 border-purple-500/20';
+                    case 'page_exit': return 'bg-red-500/10 text-red-400 border-red-500/20';
+                    default: return 'bg-slate-700/50 text-slate-300 border-slate-600';
+                }
+            };
+
+            const getEventDetail = (log) => {
+                if (log.eventType === 'click') return <span>Click: <b className="text-white">{log.elementText || log.elementType}</b></span>;
+                if (log.eventType === 'scroll') return <span>Depth: <b className="text-white">{log.scrollPercentage}%</b> ({log.scrollY}px)</span>;
+                if (log.eventType === 'hover') return <span>Hover: <b className="text-white">{log.elementText}</b></span>;
+                if (log.eventType === 'page_load') return <span>Viewport: {log.viewport}</span>;
+                return log.eventName || JSON.stringify(log).slice(0, 50);
+            };
+
+            const filteredLogs = filter === 'all' ? logs : logs.filter(l => l.eventType === filter);
+
+            return (
+                <div className="container mx-auto p-4 md:p-8 max-w-[1600px]">
+                    
+                    {/* Header */}
+                    <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+                        <div>
+                            <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-cyan-400">
+                                📊 Clickstream Viewer
+                            </h1>
+                            <p className="text-slate-500 text-sm mt-1">Real-time User Activity Monitoring</p>
+                        </div>
+                        <div className="flex gap-2">
+                             <button onClick={() => setAutoRefresh(!autoRefresh)} 
+                                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all border ${
+                                    autoRefresh ? 'bg-amber-500/20 text-amber-400 border-amber-500/50' : 'glass text-slate-400 border-slate-700 hover:text-white'
+                                }`}>
+                                <Icons.Clock /> {autoRefresh ? 'Auto: ON' : 'Auto: OFF'}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Stats */}
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+                        <StatCard title="Events" value={stats.total} icon={<Icons.Activity />} color={{bg:'bg-indigo-500', text:'text-indigo-400'}} />
+                        <StatCard title="Clicks" value={stats.clicks} icon={<Icons.Click />} color={{bg:'bg-emerald-500', text:'text-emerald-400'}} />
+                        <StatCard title="Scrolls" value={stats.scrolls} icon={<Icons.Scroll />} color={{bg:'bg-blue-500', text:'text-blue-400'}} />
+                        <StatCard title="Hovers" value={stats.hovers} icon={<Icons.Eye />} color={{bg:'bg-amber-500', text:'text-amber-400'}} />
+                        <StatCard title="Sessions" value={stats.sessions} icon={<Icons.Globe />} color={{bg:'bg-purple-500', text:'text-purple-400'}} />
+                    </div>
+
+                    {/* Toolbar */}
+                    <div className="glass p-4 rounded-xl mb-6 flex flex-col lg:flex-row gap-4 justify-between items-center sticky top-2 z-10 shadow-xl shadow-black/20">
+                        {/* Filters */}
+                        <div className="flex flex-wrap gap-2 justify-center">
+                            {['all', 'click', 'scroll', 'hover', 'page_load'].map(f => (
+                                <button key={f} onClick={() => setFilter(f)} 
+                                    className={`px-4 py-2 rounded-lg text-sm font-medium capitalize transition-all ${
+                                        filter === f ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'text-slate-400 hover:bg-slate-700/50'
+                                    }`}>
+                                    {f.replace('_', ' ')}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex gap-2">
+                            <button onClick={fetchLogs} className="p-2 rounded-lg bg-slate-700/50 hover:bg-indigo-600 text-slate-300 hover:text-white transition-all" title="Refresh">
+                                <span className={isLoading ? 'animate-spin block' : ''}><Icons.Refresh /></span>
+                            </button>
+                            <button onClick={exportLogs} className="p-2 rounded-lg bg-slate-700/50 hover:bg-emerald-600 text-slate-300 hover:text-white transition-all" title="Export">
+                                <Icons.Download />
+                            </button>
+                            <button onClick={clearLogs} className="p-2 rounded-lg bg-slate-700/50 hover:bg-red-600 text-slate-300 hover:text-white transition-all" title="Clear All">
+                                <Icons.Trash />
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Table */}
+                    <div className="glass rounded-xl overflow-hidden min-h-[400px]">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-slate-800/80 text-slate-400 text-xs uppercase tracking-wider border-b border-slate-700">
+                                        <th className="p-4 font-semibold">#</th>
+                                        <th className="p-4 font-semibold">Thời gian</th>
+                                        <th className="p-4 font-semibold">Session</th>
+                                        <th className="p-4 font-semibold">Loại</th>
+                                        <th className="p-4 font-semibold">Chi tiết</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-700/50">
+                                    {filteredLogs.length === 0 ? (
+                                        <tr><td colSpan="5" className="p-10 text-center text-slate-500">Không có dữ liệu hiển thị</td></tr>
+                                    ) : (
+                                        filteredLogs.slice().reverse().map((log, i) => (
+                                            <tr key={i} className="hover:bg-slate-700/30 transition-colors group">
+                                                <td className="p-4 text-slate-500 text-sm font-mono">{filteredLogs.length - i}</td>
+                                                <td className="p-4 text-slate-300 text-sm">
+                                                    {new Date(log.timestamp).toLocaleTimeString('vi-VN')}
+                                                    <span className="text-slate-600 text-xs ml-2">{new Date(log.timestamp).toLocaleDateString('vi-VN')}</span>
+                                                </td>
+                                                <td className="p-4"><span className="font-mono text-xs bg-black/30 px-2 py-1 rounded text-slate-400">{log.sessionId?.slice(-8)}</span></td>
+                                                <td className="p-4">
+                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getEventStyle(log.eventType)}`}>
+                                                        {log.eventType.toUpperCase()}
+                                                    </span>
+                                                </td>
+                                                <td className="p-4 text-slate-400 text-sm truncate max-w-md group-hover:text-slate-200 transition-colors">
+                                                    {getEventDetail(log)}
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

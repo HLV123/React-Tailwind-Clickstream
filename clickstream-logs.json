@@ -1,0 +1,13 @@
+{
+  "logs": [
+    {
+      "sessionId": "session_1770037338775_8m36zbofg",
+      "timestamp": "2026-02-02T13:10:56.213Z",
+      "eventType": "page_exit",
+      "eventName": "page_exit",
+      "timeSpentMs": 517438,
+      "timeSpentSeconds": 517,
+      "serverTimestamp": "2026-02-02T13:10:56.218Z"
+    }
+  ]
+}
